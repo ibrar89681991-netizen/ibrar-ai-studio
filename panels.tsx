@@ -151,21 +151,123 @@ export function TextToImagePanel({ initialPrompt }: { initialPrompt?: string }) 
   const { t } = useI18n()
   const [style, setStyle] = React.useState(imageStyles[0])
   const [ratio, setRatio] = React.useState(aspectRatios[0])
+  const [prompt, setPrompt] = React.useState(initialPrompt ?? '')
+  const [negative, setNegative] = React.useState('')
+  const [loading, setLoading] = React.useState(false)
+  const [image, setImage] = React.useState<string | null>(null)
+  const [error, setError] = React.useState('')
+
+  async function generate(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setImage(null)
+
+    try {
+      const response = await fetch('/api/image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, negative, style, ratio }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Image generation failed')
+      }
+
+      setImage(data.image)
+      toast.success('Image generated successfully!')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Something went wrong'
+      setError(message)
+      toast.error(message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
-    <GenerateForm tool="text-to-image">
-      <Field label={t('studio.prompt')} htmlFor="tti-prompt">
-        <Textarea id="tti-prompt" required rows={4} defaultValue={initialPrompt} placeholder={t('hero.placeholder')} />
-      </Field>
-      <Field label={t('studio.negative')} htmlFor="tti-neg">
-        <Input id="tti-neg" placeholder="blurry, low quality, text" />
-      </Field>
-      <Field label={t('studio.style')}>
-        <Chips options={imageStyles} value={style} onChange={setStyle} label={t('studio.style')} />
-      </Field>
-      <Field label={t('studio.ratio')}>
-        <Chips options={aspectRatios} value={ratio} onChange={setRatio} label={t('studio.ratio')} />
-      </Field>
-    </GenerateForm>
+    <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+      <form
+        className="glass space-y-6 rounded-3xl p-5 sm:p-6"
+        onSubmit={generate}
+      >
+        <Field label={t('studio.prompt')} htmlFor="tti-prompt">
+          <Textarea
+            id="tti-prompt"
+            required
+            minLength={3}
+            maxLength={1500}
+            rows={4}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder={t('hero.placeholder')}
+          />
+        </Field>
+
+        <Field label={t('studio.negative')} htmlFor="tti-neg">
+          <Input
+            id="tti-neg"
+            value={negative}
+            maxLength={300}
+            onChange={(e) => setNegative(e.target.value)}
+            placeholder="blurry, low quality, text"
+          />
+        </Field>
+
+        <Field label={t('studio.style')}>
+          <Chips options={imageStyles} value={style} onChange={setStyle} label={t('studio.style')} />
+        </Field>
+
+        <Field label={t('studio.ratio')}>
+          <Chips options={aspectRatios} value={ratio} onChange={setRatio} label={t('studio.ratio')} />
+        </Field>
+
+        <div className="flex items-center justify-end border-t border-border/60 pt-5">
+          <Button type="submit" variant="brand" size="xl" disabled={loading}>
+            <Sparkles />
+            {loading ? 'Generating...' : t('studio.generate')}
+          </Button>
+        </div>
+      </form>
+
+      <div>
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {t('studio.output')}
+        </h3>
+
+        <div className="glass flex min-h-72 flex-col items-center justify-center rounded-3xl p-6 text-center">
+          {loading ? (
+            <p className="text-sm text-muted-foreground">AI image is being generated...</p>
+          ) : image ? (
+            <>
+              <img
+                src={image}
+                alt="AI generated image"
+                className="w-full rounded-2xl"
+              />
+              <a
+                href={image}
+                download="ibrar-ai-image.png"
+                className="mt-4 rounded-xl bg-violet-600 px-5 py-3 text-white"
+              >
+                Download Image
+              </a>
+            </>
+          ) : error ? (
+            <p className="text-sm text-red-400">{error}</p>
+          ) : (
+            <>
+              <LogoMark className="size-14 opacity-60" />
+              <p className="mt-4 text-sm text-muted-foreground">
+                {t('studio.emptyOutput')}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
